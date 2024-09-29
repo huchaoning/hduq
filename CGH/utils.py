@@ -1,8 +1,8 @@
 import numpy as np
 
-from ..equipments import slm
-from ..futils import min_max_normalize as nl
-from ..macro import fast_meshgrid
+# from ..equipments import slm
+# from ..futils import min_max_normalize as nl
+# from ..macro import fast_meshgrid
 
 
 (h, v), p = slm.resolution, slm.pixel_size
