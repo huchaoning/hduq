@@ -11,7 +11,7 @@ from PIL import Image
 
 import importlib.resources as resources
 
-__all__ = ['SLM', 'HG', 'LG', 'PMx', 'PMy', 'CGH']
+__all__ = ['SLM', 'HG', 'LG', 'PM', 'CGH', 'utils']
 
 
 class SLM:
@@ -32,6 +32,44 @@ class SLM:
 
 
 class _Mode:
+    @classmethod
+    def check(self, inputs):
+        if not isinstance(inputs, (HG, LG, PM)):
+            raise ValueError('invalid mode')
+        return inputs
+    
+    def __add__(self, other):
+        return PM(self, other, '+')
+    
+    def __sub__(self, other):
+        return PM(self, other, '-')
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.n}, {self.m})'
+
+
+class PM:
+    def __init__(self, mode1, mode2, op):
+        self.mode1 = _Mode.check(mode1)
+        self.mode2 = _Mode.check(mode2)
+        self.op = op
+
+    def wave_function(self, w0):
+        wf1 = self.mode1.wave_function(w0)
+        wf2 = self.mode2.wave_function(w0)
+        if self.op == '+':
+            return (wf1 + wf2) / np.sqrt(2)
+        elif self.op == '-':
+            return (wf1 - wf2) / np.sqrt(2)
+        else:
+            raise ValueError('invalid operation')
+
+    def __repr__(self):
+        return f'{self.mode1} {self.op} {self.mode2}'
+
+
+
+class HG(_Mode):
     def __init__(self, n, m):
         valid = all(isinstance(x, int) and x >= 0 for x in (n, m))
         if valid:
@@ -40,22 +78,17 @@ class _Mode:
         else:
             raise ValueError('orders must be positive integers')
 
-    @classmethod
-    def check(self, inputs):
-        if not isinstance(inputs, (HG, LG, PMx, PMy)):
-            raise ValueError('invalid mode')
 
-
-
-class HG(_Mode):
-    def complex_amplitude(self, w0):
+    def wave_function(self, w0):
         n, m = self.n, self.m
+
         norm = np.sqrt(2**(1-n-m) / (pi * factorial(m) * factorial(n))) / w0
         hx, hy= hermite(n)(2**.5 * SLM.x / w0), hermite(m)(2**.5 * SLM.y / w0)
-        amplitude = norm * hx * hy * np.exp(-SLM.rho/(w0**2))
+        ca = norm * hx * hy * np.exp(-SLM.rho/(w0**2))
+        a, phi = np.abs(ca), np.angle(ca)
 
-        return amplitude * np.exp(0j)
-    
+        return a * np.exp(1j * phi)
+
 
 
 class LG(_Mode):
@@ -64,70 +97,132 @@ class LG(_Mode):
 
 
 
-class PMx:
-    def __init__(self, pm):
-        if pm.lower() in ('p', 'plus'):
-            self.pm = 1
-        elif pm.lower() in ('m', 'minus'):
-            self.pm = -1
-        else:
-            raise ValueError("pm must be '(p)lus' or '(m)inus'")
-
-    def complex_amplitude(self, w0):
-        hg00 = HG(0, 0).complex_amplitude(w0)
-        hg10 = HG(1, 0).complex_amplitude(w0)
-        return (hg00 + self.pm * hg10) / 2**.5
-
-
-
-class PMy(PMx):
-    def complex_amplitude(self, w0):
-        hg00 = HG(0, 0).complex_amplitude(w0)
-        hg01 = HG(0, 1).complex_amplitude(w0)
-        return (hg00 + self.pm * hg01) / 2**.5
-
-
-
 class CGH:
-    def __init__(self, sigma, *modes, nx=500, ny=50):
+    def __init__(self, sigma):
+        self.sigma = sigma
+        self.w0 = 2*sigma
+        self.mode_list, self.nx_list, self.ny_list = [], [], []
+        self.cgh = None
 
-        [_Mode.check(mode) for mode in modes]
 
-        w0 = 2*sigma
+    def _check_cgh(self):
+        if not self.mode_list:
+            raise RuntimeError('No modes added. Use add_modes() to add at least one mode.')
+        if self.cgh is None:
+            print('CGH not generated. Running cal() automatically...')
+            self.cal()
 
-        if len(modes) == 1:
-            ca = modes[0].complex_amplitude(w0)
 
-        elif len(modes) == 2:
-            ca0, ca1 = [m.complex_amplitude(w0) for m in modes]
-            ca = ca0*np.exp(2j*pi*SLM.norm_y*ny) + ca1*np.exp(-2j*pi*SLM.norm_y*ny)
+    def add_modes(self, mode_list, nx_list, ny_list):
+        for mode in mode_list:
+            _Mode.check(mode)
 
-        else:
-            raise ValueError('invalid modes parameter, possibly due to ' +
-                             'the number of modes being <= 0, or > 2')
+        mode_list = np.atleast_1d(mode_list)
+        nx_list = np.atleast_1d(nx_list)
+        ny_list = np.atleast_1d(ny_list)
+
+        if not (len(mode_list) == len(nx_list) == len(ny_list)):
+            raise ValueError("mode_list, nx_list, and ny_list must have the same length")
         
+        self.mode_list.extend(mode_list)
+        self.nx_list.extend(nx_list)
+        self.ny_list.extend(ny_list)
+
+
+    @classmethod
+    def fx2(cls, x):
         with resources.files('hduq.assets').joinpath('fx2.npy').open('rb') as f:
-            fx2 = interp1d(np.linspace(0, 1, 801), np.load(f))
-        
-        a = np.abs(ca) / np.abs(ca).max()
-        phi = np.angle(ca)
+            _fx2 = interp1d(np.linspace(0, 1, 801), np.load(f))
+        return _fx2(x)
 
-        _temp = fx2(a) * np.sin(phi + 2*pi*SLM.norm_x*nx)
-        
+
+    def cal(self):
+        V = 0
+        for i, mode in enumerate(self.mode_list):
+            V = V + (mode.wave_function(self.w0) * np.exp(2j*pi * (SLM.norm_x*self.nx_list[i] + SLM.norm_y*self.ny_list[i])))
+
+        a = np.abs(V) / np.abs(V).max()
+        phi = np.angle(V)
+
+        _temp = self.fx2(a) * np.sin(phi)
         _temp = ((_temp - _temp.min()) / (_temp.max() - _temp.min())) * 255
 
         self.cgh = _temp.astype(np.uint8)
         self.img = Image.fromarray(self.cgh)
 
+
     def result(self):
+        self._check_cgh()
         return self.cgh
-    
+
+
     def show(self):
+        self._check_cgh()
         self.img.show()
-    
-    def save(self, file):
+
+
+    def save(self, file, override=False):
+        self._check_cgh()
         file = path.expanduser(file)
-        if not path.exists(file):
+        if not path.exists(file) or override:
             self.img.save(file)
         else:
             raise FileExistsError(f'{file} already exists')
+
+
+
+class utils:
+    @classmethod
+    def line(cls, modes_num, x_scale=1, y_scale=1):
+        nx = np.array([500] * modes_num).ravel() if modes_num != 1 else 500
+        ny = np.linspace(-50, 50, modes_num) if modes_num != 1 else 0
+        return np.array([nx * x_scale, ny * y_scale])
+
+
+    @classmethod
+    def arc(cls, modes_num, x_scale=1, y_scale=1):
+        angle_rad = np.deg2rad(45)
+        theta = np.linspace(-angle_rad/2, angle_rad/2, modes_num)
+        radius = 500
+        nx = radius * np.cos(theta)
+        ny = radius * np.sin(theta) 
+        return np.array([nx * x_scale, ny * y_scale])
+    
+
+    @classmethod
+    def hg_mat(cls, max_n, max_m):
+        modes = np.empty((max_n, max_m), dtype=object)
+        for n in range(max_n):
+            for m in range(max_m):
+                modes[n, m] = HG(n, m)
+        return modes
+    
+
+    @classmethod
+    def pm_mat(cls, max_n, max_m):
+        modes = [HG(n, m) for n in range(max_n) for m in range(max_m)]
+        size = len(modes)
+        pm_modes = np.empty((size, size), dtype=object)
+        for i in range(size):
+            for j in range(i, size):
+                if i != j:
+                    pm_modes[i, j] = modes[i] + modes[j]
+                    pm_modes[j, i] = modes[i] - modes[j]
+        return pm_modes
+
+
+
+    @classmethod
+    def preset_cgh(cls, *modes, sigma, dist, x_scale=1, y_scale=1):
+        cgh = CGH(sigma)
+        if dist == 'v_line':
+            cgh.add_modes(modes, *cls.line(len(modes), x_scale, y_scale))
+        elif dist == 'h_line':
+            cgh.add_modes(modes, *cls.line(len(modes)[::-1, ...], x_scale, y_scale))
+        elif dist == 'v_arc':
+            cgh.add_modes(modes, *cls.arc(len(modes), x_scale, y_scale))
+        elif dist == 'h_arc':
+            cgh.add_modes(modes, *cls.arc(len(modes)[::-1, ...], x_scale, y_scale))
+
+        cgh.cal()
+        return cgh

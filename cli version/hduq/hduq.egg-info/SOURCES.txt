@@ -9,3 +9,4 @@ hduq.egg-info/entry_points.txt
 hduq.egg-info/requires.txt
 hduq.egg-info/top_level.txt
 hduq/assets/__init__.py
+hduq/assets/fx2.npy

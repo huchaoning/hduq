@@ -2,10 +2,10 @@ from setuptools import setup, find_packages
 
 setup(
     name='hduq',
-    version='0.0.1',
+    version='0.0.2',
     packages=find_packages(),
     include_package_data=True,
-    package_data={'hduq.asset': ['*']},
+    package_data={'hduq.assets': ['*']},
     entry_points={
         'console_scripts': [
             'hduq=hduq.cli:main',
