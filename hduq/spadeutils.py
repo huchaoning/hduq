@@ -33,7 +33,7 @@ class _PSF:
 
 
     def fit(self, data):
-        ...
+        raise(NotImplementedError)
 
 
 
