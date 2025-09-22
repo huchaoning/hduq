@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='hduq',
-    version='0.0.3',
+    version='0.0.4',
     packages=find_packages(),
     include_package_data=True,
     package_data={'hduq.assets': ['*']},
@@ -15,6 +15,8 @@ setup(
         'numpy',
         'scipy',
         'Pillow',
+        'dask',
+        'psutil'
     ],
     license='GPLv3',
     license_files='LICENSE',
