@@ -63,8 +63,6 @@ class SLM:
            np.arange(-resolution[0]/2, resolution[0]/2) * pixel_size,
           -np.arange(-resolution[1]/2, resolution[1]/2) * pixel_size)
     
-    rho = x**2 + y**2
-
     norm_x = x / (resolution[0] * pixel_size)
     norm_y = y / (resolution[1] * pixel_size)
 
@@ -84,7 +82,7 @@ class _Mode:
         return PM(self, other, '-')
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.order1}, {self.order2})'
+        return f'[{self.__class__.__name__}({self.order1}, {self.order2}); shift({self.x_shift}, {self.y_shift})]'
 
 
 
@@ -111,11 +109,15 @@ class PM(_Mode):
 
 
 class HG(_Mode):
-    def __init__(self, n, m):
+    def __init__(self, n, m, x_shift=0, y_shift=0):
         if all(isinstance(x, int) and x >= 0 for x in (n, m)):
             self.order1 = n
             self.order2 = m
             self.norm = 1
+
+            self.x_shift, self.y_shift = x_shift, y_shift
+            self.x, self.y = SLM.x + x_shift, SLM.y + y_shift
+            self.rho = self.x**2 + self.y**2
         else:
             raise ValueError('orders must be positive integers')
 
@@ -125,8 +127,8 @@ class HG(_Mode):
         n, m = self.order1, self.order2
 
         N = np.sqrt(2**(1-n-m) / (pi * factorial(m) * factorial(n))) / w0
-        hx, hy= hermite(n)(2**.5 * SLM.x / w0), hermite(m)(2**.5 * SLM.y / w0)
-        ca = N * hx * hy * np.exp(-SLM.rho/(w0**2))
+        hx, hy= hermite(n)(2**.5 * self.x / w0), hermite(m)(2**.5 * self.y / w0)
+        ca = N * hx * hy * np.exp(-self.rho/(w0**2))
         a, phi = np.abs(ca), np.angle(ca)
 
         return a * np.exp(1j * phi)
@@ -140,17 +142,19 @@ class LG(_Mode):
 
 
 class CGH:
-    def __init__(self, sigma):
+    def __init__(self, sigma, quiet=False):
         self.sigma = sigma
         self.mode_list, self.nx_list, self.ny_list = [], [], []
         self.cgh = None
+
+        self.quiet = quiet
 
 
     def _check_cgh(self):
         if not self.mode_list:
             raise RuntimeError('No modes added. Use add_modes() to add at least one mode.')
         if self.cgh is None:
-            print('CGH not generated. Running cal() automatically...')
+            if not self.quiet: print('CGH not generated. Running cal() automatically...')
             self.cal()
 
 
@@ -168,6 +172,12 @@ class CGH:
         self.mode_list.extend(mode_list)
         self.nx_list.extend(nx_list)
         self.ny_list.extend(ny_list)
+
+    
+    def clear_modes(self):
+        if not self.quiet: print('resetting...')
+        self.mode_list, self.nx_list, self.ny_list = [], [], []
+        self.cgh = None
 
 
     @staticmethod
@@ -209,6 +219,7 @@ class CGH:
             self.img.save(file)
         else:
             raise FileExistsError(f'{file} already exists')
+
 
 
 
