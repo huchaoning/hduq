@@ -4,6 +4,49 @@ from scipy.integrate import quad
 from scipy.optimize import minimize
 
 
+from functools import wraps
+
+__all__ = []
+
+def export(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    __all__.append(func.__name__)
+    return wrapper
+
+
+
+@export
+def jinc(x):
+    is_scalar = np.isscalar(x)
+    x = np.asarray(x, dtype=np.float64)
+    result = np.empty_like(x)
+
+    mask = x != 0
+    result[~mask] = 1.0
+    result[mask] = (2 * j1(x[mask])) / x[mask]
+
+    return result.item() if is_scalar else result
+
+
+
+@export
+def ThinLens(U_input):
+    Ny, Nx = U_input.shape
+    N = max(Nx, Ny)
+    U_pad = np.zeros((N, N), dtype=complex)
+
+    start_y = (N - Ny) // 2
+    start_x = (N - Nx) // 2
+    U_pad[start_y : start_y + Ny, start_x : start_x + Nx] = U_input
+
+    U_focal_pad = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(U_pad)))
+    U_focal = U_focal_pad[start_y : start_y + Ny, start_x : start_x + Nx]
+
+    return U_focal
+
+
 
 class _PSF:
     def __init__(self, sigma=1, bounds=(None, None), pixel_size=1):
@@ -14,6 +57,7 @@ class _PSF:
             bounds[1] if bounds[1] is not None else np.round( 6 * sigma / pixel_size)
         )
         self.pixels = int(self.bounds[1] - self.bounds[0])
+
 
     def pdf(self, x, s=0):
         return np.abs(self.psf(x, s))**2
@@ -38,31 +82,21 @@ class _PSF:
 
 
 
+@export
 class SincPSF(_PSF):
     def psf(self, x, s=0):
         return (self.sigma*np.pi)**-0.5 * np.sinc((x-s) / (self.sigma*np.pi))
 
 
 
+@export
 class JincPSF(_PSF):
-    @classmethod
-    def jinc(cls, x):
-        is_scalar = np.isscalar(x)
-        x = np.asarray(x, dtype=np.float64)
-        result = np.empty_like(x)
-
-        mask = x != 0
-        result[~mask] = 1.0
-        result[mask] = (2 * j1(x[mask])) / x[mask]
-
-        return result.item() if is_scalar else result
-
-
     def psf(self, x, s=0):
-        return ((3*np.pi) / (32*self.sigma))**0.5 * self.jinc((x-s) / self.sigma)
+        return ((3*np.pi) / (32*self.sigma))**0.5 * jinc((x-s) / self.sigma)
 
 
 
+@export
 class GausPSF(_PSF):
     def psf(self, x, s=0):
         return (2*np.pi*self.sigma**2)**-0.25 * np.exp(-((x-s)**2) / (4*self.sigma**2))
@@ -102,6 +136,7 @@ class _Modes:
 
 
 
+@export
 class HG(_Modes):
     def __init__(self, q, sigma=1):
         if q % 1 != 0 or q < 0:
@@ -124,10 +159,11 @@ class HG(_Modes):
 
 
 
+@export
 class PM(_Modes):
     def __init__(self, q, sigma=1):
         if q not in (-1, 1):
-            raise ValueError('Fpr PM modes, q must -1 or 1.')
+            raise ValueError('For PM modes, q must -1 or 1.')
         super().__init__(q, sigma)
 
 
@@ -137,7 +173,7 @@ class PM(_Modes):
 
 
 
-
+@export
 def Born(s, modes: _Modes, psf: _PSF):
     result = []
     for _s in np.atleast_1d(s):
@@ -147,7 +183,7 @@ def Born(s, modes: _Modes, psf: _PSF):
 
 
 
-
+@export
 def FisherInfo(s, modes: _Modes, psf: _PSF, ds=1e-8):
     p1 = Born(s+ds, modes, psf)
     p2 = Born(s-ds, modes, psf)
