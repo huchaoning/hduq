@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='hduq',
-    version='0.0.4',
+    version='0.0.5',
     packages=find_packages(),
     include_package_data=True,
     package_data={'hduq.assets': ['*']},
@@ -13,8 +13,10 @@ setup(
     # },
     install_requires=[
         'numpy',
+        'pandas',
         'scipy',
         'Pillow',
+        'opencv-python',
         'dask',
         'psutil'
     ],
