@@ -5,6 +5,10 @@ from PIL import Image
 import cv2
 import json
 
+import io
+from IPython.display import display
+from IPython.display import Image as IPImage
+
 import os
 import inspect
 import platform
@@ -14,8 +18,11 @@ import subprocess
 __all__ = [
     'code',
     'finder',
-    'read',
+    'load',
+    'save',
+    'gifshow'
 ]
+
 
 
 def code(input_):
@@ -29,7 +36,7 @@ def code(input_):
     elif platform.system() == 'Windows':
         subprocess.run(['powershell.exe', '-Command', f'code {file_path}'], check=True)
     else:
-        raise NotImplementedError('This function is supported on Windows and macOS only. ')
+        raise NotImplementedError('This function is supported on Windows and macOS only.')
 
 
 
@@ -40,7 +47,7 @@ def finder(path):
     elif platform.system() == 'Windows':
         subprocess.run(['start', '', path], shell=True, check=True)
     else:
-        raise NotImplementedError('This function is supported on Windows and macOS only. ')
+        raise NotImplementedError('This function is supported on Windows and macOS only.')
     
     return os.path.abspath(path)
 
@@ -113,14 +120,14 @@ class _FileReader:
 
 
     def _other(self):
-        msg = f"No implemented method for '{self.ext}', nothing to return."
+        msg = f"No implemented method for '.{self.ext}', nothing to return."
         if os.path.exists(self.path):
-            msg += f" The file '{self.name}' exists, you may use finder() to open it."
+            msg += f"The file '{self.name}' exists, you may use finder() to open it."
         print(msg)
         return None
 
 
-    def read(self):
+    def load(self):
         if self.ext == 'npz':
             data = self._npz()
 
@@ -146,75 +153,73 @@ class _FileReader:
 
 
 
-def read(path, dtype=float):
-    target = _FileReader(path, dtype)
-    return target.read()
-    
+class _FileWriter:
+    def __init__(self, path, data, dtype=float):
+        self.path = os.path.abspath(os.path.expanduser(path))
+        self.data = data
+        self.dtype = dtype
+
+        self.ext = os.path.splitext(self.path)[-1].lower()[1:]
+        self.name = os.path.basename(self.path)
+        self.stem = os.path.splitext(self.name)[0]
 
 
-# class _FileWriter:
-#     pass
+    def _json(self):
+        if isinstance(self.data, dict):
+            with open(self.path, 'w') as f:
+                json.dump(self.data, f, indent=2)
+        else:
+            raise TypeError("'.json' format requires a dict of arrays")
 
 
-
-# def _to_csv(array=None, save=None):
-#     if array is not None:
-#         pd.DataFrame(array).to_csv(save, header=None, index=None)
-#     else:
-#         raise TypeError('array is None')
-
-# def imwrite(array=None, save=None, convert=False):
-#     if array is not None:
-#         if array.dtype == np.uint8:
-#             Image.fromarray(array).save(save)
-#         elif not (array.dtype == np.uint8) and convert:
-#             Image.fromarray(array.astype(np.uint8)).save(save)
-#         else:
-#             raise TypeError('array.dtype must be np.uint8')
-#     else:
-#         raise TypeError('array is None')
+    def _csv(self):
+        arr = np.array(self.data).astype(self.dtype)
+        pd.DataFrame(arr).to_csv(self.path, index=False, header=False)
 
 
-# def gifshow(array, auto_contrast=True, loops=0, fps=30, save=None, override=False):
-#     import io
-#     from IPython.display import display, Image as IPImage
-    
-#     array = read(array)
-#     if array.ndim != 3:
-#         raise ValueError('array must be 3-d')
+    def _npy(self):
+        np.save(self.path, np.array(self.data).astype(self.dtype))
+
+
+    def _npz(self):
+        if isinstance(self.data, dict):
+            np.savez_compressed(self.path, **{k: np.array(v).astype(self.dtype) for k, v in self.data.items()})
+            return self.path
+        else:
+            raise TypeError("'.npz format requires a dict of arrays")
+
+
+    def _other(self):
+        msg = f"No implemented saver for '.{self.ext}', nothing saved."
+        print(msg)
+
+
+    def save(self):
+        if self.ext == 'npz':
+            self._npz()
         
-#     duration = int(1000 / fps)
-#     if auto_contrast:
-#         images = [Image.fromarray(min_max_normalize(frame, min_=0, max_=255)) 
-#                   for frame in array]
-#     else:
-#         images = [Image.fromarray(frame)for frame in array]
-#     gif_buffer = io.BytesIO()
+        elif self.ext == 'npy':
+            self._npy()
+        
+        elif self.ext == 'csv':
+            self._csv()
+        
+        elif self.ext == 'json':
+            self._json()
+        
+        else:
+            self._other()
 
-#     if loops == 1:
-#         loop = None
-#     elif loops in (0, np.inf):
-#         loop = 0
-#     else:
-#         loop = loops - 1
 
-#     images[0].save(gif_buffer, 
-#                    format='GIF', 
-#                    save_all=True, 
-#                    append_images=images[1:], 
-#                    duration=duration, 
-#                    loop=loop)
-    
-#     gif_buffer.seek(0)
 
-#     if save is not None:
-#         if os.path.exists(save):
-#             if override:
-#                 os.remove(save)
-#             elif not override:
-#                 raise FileExistsError('file already exists')
-#         else:
-#             with open(save, 'wb') as f:
-#                 f.write(gif_buffer.getvalue())
+def load(path, dtype=float):
+    target = _FileReader(path, dtype)
+    return target.load()
 
-#     display(IPImage(data=gif_buffer.getvalue(), format='gif'))
+
+
+def save(path, data, dtype=float):
+    target = _FileWriter(path, data, dtype)
+    target.save()
+    return target.path
+
