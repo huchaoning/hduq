@@ -18,11 +18,11 @@ __all__ = [
 ]
 
 
-all_list = []
+# all_list = []
 
-def export(obj):
-    all_list.append(obj.__name__)
-    return obj
+# def export(obj):
+#     all_list.append(obj.__name__)
+#     return obj
     
 
 
@@ -41,7 +41,7 @@ def jinc(x):
 
 
 # @export
-def ThinLens(U_input):
+def thin_lens(U_input):
     Ny, Nx = U_input.shape
     N = max(Nx, Ny)
     U_pad = np.zeros((N, N), dtype=complex)
@@ -190,7 +190,7 @@ class PlusMinus1D(_Modes):
 
 
 # @export
-def Born(s, basis, psf: _PSF):
+def born(s, basis, psf: _PSF):
     s = np.atleast_1d(s)
     basis = np.atleast_1d(basis)
 
@@ -222,10 +222,10 @@ def Born(s, basis, psf: _PSF):
 
 
 # @export
-def FisherInfo(s, basis, psf: _PSF, ds=1e-8):
+def fisher_info(s, basis, psf: _PSF, ds=1e-8):
     def fi_e(mode):
-        p1 = Born(s+ds, mode, psf)
-        p2 = Born(s-ds, mode, psf)
+        p1 = born(s+ds, mode, psf)
+        p2 = born(s-ds, mode, psf)
         dp = p1 - p2
         dv = dp/(2*ds)
         return dv**2 / p1
@@ -238,15 +238,25 @@ def FisherInfo(s, basis, psf: _PSF, ds=1e-8):
 
 
 # @export
-def Measure(s, basis, psf: _PSF, photons=1):
-    p = Born(s, basis, psf)
-    outcomes = np.random.choice(len(p), photons, p=p/p.sum())
-    return np.histogram(outcomes, bins=len(p), range=(0, len(p)))[0]
+def measure(s, basis, psf: _PSF, photons=1, return_leaked=False):
+    if len(np.atleast_1d(s)) != 1:
+        raise ValueError("Invalid input shapes: 's' must be scale.")
+    p = np.atleast_1d(born(s, basis, psf))
+    cdf = np.concatenate(([0], np.cumsum(p), [1]))
+    outcomes = np.histogram(np.random.uniform(0, 1, photons), bins=cdf)[0]
+
+    if isinstance(return_leaked, bool):
+        if return_leaked:
+            return outcomes
+        else:
+            return outcomes[:-1]
+    else:
+        raise ValueError(f"Invalid argument for 'return_leaked': expected bool, got {type(return_leaked).__name__}")
+    
 
 
-
-if __name__ == '__main__':
-    print('__all__ = [')
-    for name in all_list:
-        print(f"    '{name}',")
-    print(']')
+# if __name__ == '__main__':
+#     print('__all__ = [')
+#     for name in all_list:
+#         print(f"    '{name}',")
+#     print(']')

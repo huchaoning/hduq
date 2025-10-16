@@ -31,19 +31,25 @@ def code(input_):
         subprocess.run(['powershell.exe', '-Command', f'code {file_path}'], check=True)
     else:
         raise NotImplementedError('This function is supported on Windows and macOS only.')
+    
+    return os.path.abspath(file_path)
 
 
 
-def finder(path):
-    path = os.path.expanduser(path)
+def finder(input_):
+    if inspect.isfunction(input_) or inspect.ismodule(input_) or inspect.isclass(input_):
+        file_path = os.path.dirname(inspect.getfile(input_))
+    else:
+        file_path = os.path.expanduser(input_)
+
     if platform.system() == 'Darwin':
-        subprocess.run(['open', path], check=True)
+        subprocess.run(['open', file_path], check=True)
     elif platform.system() == 'Windows':
-        subprocess.run(['start', '', path], shell=True, check=True)
+        subprocess.run(['start', '', file_path], shell=True, check=True)
     else:
         raise NotImplementedError('This function is supported on Windows and macOS only.')
     
-    return os.path.abspath(path)
+    return os.path.abspath(file_path)
 
 
 
