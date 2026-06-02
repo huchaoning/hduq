@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "hduq"
+description = "HDU Quantum Metrology Lab Python Utils"
+dynamic = ["version"]
+
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "HDU Quantum Metrology Lab" }
+]
+
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = []
+
+
+[project.optional-dependencies]
+cnhu = [
+    "numpy",
+    "scipy",
+    "pillow"
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hduq*"]
+
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
