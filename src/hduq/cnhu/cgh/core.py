@@ -8,7 +8,6 @@ from scipy.special import hermite, laguerre
 from os import path
 from PIL import Image
 
-import json
 from scipy.interpolate import interp1d
 import importlib.resources as resources
 with resources.files('hduq.cnhu.assets').joinpath('fx2.npy').open('rb') as f:
@@ -50,18 +49,61 @@ class _FFTUtils:
 class _Mode:
     @staticmethod
     def check(inputs):
-        if not isinstance(inputs, (HG, LG, PM)):
+        if not isinstance(inputs, _Mode):
             raise ValueError('invalid mode')
         return inputs
+    
+    def flatten(self):
+        visitor = _FlattenVisitor()
+        visitor.visit(self, 1)
+        return visitor.plus, visitor.minus
     
     def __add__(self, other):
         return PM(self, other, '+')
     
     def __sub__(self, other):
         return PM(self, other, '-')
+    
+    def __neg__(self):
+        return PM(_Zero(), self, '-')
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.order1}, {self.order2}, {self.x_shift}, {self.y_shift})'
+
+
+
+class _Zero(_Mode):
+    def wave_function(self, *args, **kwargs):
+        return 0
+    
+    def __repr__(self):
+        return '0'
+
+
+
+class _FlattenVisitor:
+    def __init__(self):
+        self.plus = []
+        self.minus = []
+
+    def visit(self, node, sign=1):
+        if isinstance(node, PM):
+            self.visit(node.mode1, sign)
+
+            if node.pm == '+':
+                self.visit(node.mode2, sign)
+            elif node.pm == '-':
+                self.visit(node.mode2, -sign)
+
+        elif isinstance(node, _Zero):
+            return
+
+        else:
+            if sign == 1:
+                self.plus.append(node)
+            elif sign == -1:
+                self.minus.append(node)
+
 
 
 class PM(_Mode):
@@ -69,16 +111,18 @@ class PM(_Mode):
         self.mode1 = _Mode.check(mode1)
         self.mode2 = _Mode.check(mode2)
         self.pm = pm
-        self.norm = self.mode1.norm + self.mode2.norm
+        # self.norm = self.mode1.norm + self.mode2.norm
 
 
     def wave_function(self, sigma):
+        plus, minus = self.flatten()
+        norm = len(plus) + len(minus)
         wf1 = self.mode1.wave_function(sigma)
         wf2 = self.mode2.wave_function(sigma)
         if self.pm == '+':
-            return (wf1 + wf2) / np.sqrt(self.norm)
+            return (wf1 + wf2) / np.sqrt(norm)
         elif self.pm == '-':
-            return (wf1 - wf2) / np.sqrt(self.norm)
+            return (wf1 - wf2) / np.sqrt(norm)
         else:
             raise ValueError('invalid `pm` option')
 
@@ -93,7 +137,7 @@ class HG(_Mode):
         if all(isinstance(x, int) and x >= 0 for x in (n, m)):
             self.order1 = n
             self.order2 = m
-            self.norm = 1
+
 
             self.x_shift, self.y_shift = x_shift, y_shift
             self.x, self.y = SLM.x + x_shift, SLM.y + y_shift
@@ -112,6 +156,7 @@ class HG(_Mode):
         a, phi = np.abs(ca), np.angle(ca)
 
         return a * np.exp(1j * phi)
+
 
 
 class LG(_Mode):
