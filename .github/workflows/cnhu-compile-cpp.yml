@@ -47,5 +47,5 @@ jobs:
       - name: upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cnhu-binaries-${{ runner.os }}
+          name: cnhu-cgh-engine-${{ runner.os }}
           path: dist-bin/${{ runner.os }}/
