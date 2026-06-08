@@ -1,0 +1,12 @@
+src := "cgh_engine.cpp"
+lib_dir := "../lib"
+lib_name := "libcgh_engine.dylib"
+
+inc := "-I. -Ithird_party/boost_math -Ithird_party/nlohmann_json"
+
+build:
+    mkdir -p {{lib_dir}}
+    clang++ -std=c++20 -dynamiclib -O3 {{inc}} -o {{lib_dir}}/{{lib_name}} {{src}}
+
+clean:
+    rm -rf {{lib_dir}}/{{lib_name}}
