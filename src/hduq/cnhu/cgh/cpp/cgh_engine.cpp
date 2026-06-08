@@ -171,7 +171,7 @@ int cal(const char* json_str, uint8_t* out_buffer) {
 
     return 0;
   } catch (const std::exception& e) {
-    std::cerr << "C++ Engine Error: " << e.what() << std::endl;
+    std::cerr << "C++ engine error: " << e.what() << std::endl;
     return 1;
   }
 }
