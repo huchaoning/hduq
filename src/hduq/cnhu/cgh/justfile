@@ -1,8 +1,8 @@
-src := "cgh_engine.cpp"
-lib_dir := "../lib"
-lib_name := "libcgh_engine.dylib"
+src := "cpp/cgh_engine.cpp"
+lib_dir := "lib"
+lib_name := "cgh_engine.dylib"
 
-inc := "-I. -Ithird_party/boost_math -Ithird_party/nlohmann_json"
+inc := "-Icpp -Icpp/third_party/boost_math -Icpp/third_party/nlohmann_json"
 
 build:
     mkdir -p {{lib_dir}}
