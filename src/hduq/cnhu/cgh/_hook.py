@@ -1,15 +1,61 @@
-import os, json
+import os
+import json
+import platform
 from cffi import FFI
 import numpy as np
 
-ffi = FFI()
-ffi.cdef('int cal(const char* json_str, unsigned char* out_buffer);')
 
-_current_dir = os.path.dirname(os.path.abspath(__file__))
-_lib_path = os.path.join(_current_dir, 'lib', 'cgh_engine.dylib')
+class CGHEngineCPP:
+    _ffi = FFI()
+    _ffi.cdef('int cal(const char* json_str, unsigned char* out_buffer);')
 
-lib = ffi.dlopen(_lib_path)
+    def __init__(self):
+        self._lib = self._load_library()
 
+    def _load_library(self):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        system_type = platform.system()
+
+        if system_type == "Darwin":
+            lib_name = "cgh_engine.dylib"
+        elif system_type == "Linux":
+            lib_name = "cgh_engine.so"
+        elif system_type == "Windows":
+            lib_name = "cgh_engine.dll"
+        else:
+            return None
+
+        lib_path = os.path.join(current_dir, 'lib', lib_name)
+        if not os.path.exists(lib_path):
+            return None
+
+        try:
+            return self._ffi.dlopen(lib_path)
+        except Exception:
+            return None
+
+    @property
+    def is_available(self):
+        return self._lib is not None
+
+    def compute(self, cgh_instance):
+        if self._lib == None:
+            raise RuntimeError('C++ library is not loaded')
+
+        ir_dict = _serialize_cgh(cgh_instance)
+        json_bytes = json.dumps(ir_dict).encode('utf-8')
+
+        res_x, res_y = ir_dict['global']['resolution']
+        cgh_array = np.zeros((res_y, res_x), dtype=np.uint8)
+
+        out_ptr = self._ffi.cast(
+            'unsigned char*', self._ffi.from_buffer(cgh_array))
+
+        status = self._lib.cal(json_bytes, out_ptr)
+        if status != 0:
+            raise RuntimeError('C++ engine error')
+
+        return cgh_array
 
 
 def _serialize_mode(mode):
@@ -33,7 +79,6 @@ def _serialize_mode(mode):
         }
 
 
-
 def _serialize_cgh(cgh):
     data = {
         'global': {
@@ -45,28 +90,8 @@ def _serialize_cgh(cgh):
     }
 
     for mode, nx, ny in zip(cgh.mode_list, cgh.nx_list, cgh.ny_list):
-
         mode_json = _serialize_mode(mode)
-
         mode_json['nx'] = float(nx)
         mode_json['ny'] = float(ny)
-
         data['modes'].append(mode_json)
-
     return data
-
-
-
-def cal_cpp(cgh_instance):
-    ir_dict = _serialize_cgh(cgh_instance)
-    json_bytes = json.dumps(ir_dict).encode('utf-8')
-
-    res_x, res_y = ir_dict['global']['resolution']
-    cgh_array = np.zeros((res_y, res_x), dtype=np.uint8)
-    out_ptr = ffi.cast('unsigned char*', ffi.from_buffer(cgh_array))
-
-    status = lib.cal(json_bytes, out_ptr)
-    if status != 0:
-        raise RuntimeError
-
-    return cgh_array

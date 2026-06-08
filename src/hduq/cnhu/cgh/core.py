@@ -13,7 +13,7 @@ import importlib.resources as resources
 with resources.files('hduq.cnhu.assets').joinpath('fx2.npy').open('rb') as f:
     _fx2 = interp1d(np.linspace(0, 1, 801), np.load(f))
 
-from ._hook import cal_cpp
+from ._hook import CGHEngineCPP
 
 
 __all__ = ['HG', 'LG', 'PM', 'CGH']
@@ -196,6 +196,7 @@ class CGH:
         self._is_cached = False
 
         self.slm_cls = _SLM.check(slm_cls)
+        self.cgh_engine_cpp = CGHEngineCPP if CGHEngineCPP.is_available else None
 
 
     def _check_cgh(self):
@@ -288,11 +289,14 @@ class CGH:
             self.img = Image.fromarray(self.cgh)
 
         elif backend.lower() in ('c++', 'cpp'):
-            self.cgh = cal_cpp(self)
-            self.img = Image.fromarray(self.cgh)
+            if self.cgh_engine_cpp is not None:
+                self.cgh = self.cgh_engine_cpp.compute(self)
+                self.img = Image.fromarray(self.cgh)
+            else:
+                raise SystemError('C++ engine is not available')
 
         else:
-            raise ValueError
+            raise ValueError('invalid `backend` option')
 
 
     def result(self):

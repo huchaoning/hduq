@@ -1,12 +1,20 @@
+os_fam := os_family()
+os_name := os()
+
 src := "cpp/cgh_engine.cpp"
 lib_dir := "lib"
-lib_name := "cgh_engine.dylib"
+
+lib_name := if os_name == "macos" { "cgh_engine.dylib" } else if os_fam == "windows" { "cgh_engine.dll" } else { "cgh_engine.so" }
+flags    := if os_name == "macos" { "-dynamiclib" } else { "-shared -fPIC" }
+cc       := if os_name == "macos" { "clang++" } else { "g++" }
 
 inc := "-Icpp -Icpp/third_party/boost_math -Icpp/third_party/nlohmann_json"
 
+
 build:
     mkdir -p {{lib_dir}}
-    clang++ -std=c++20 -dynamiclib -O3 {{inc}} -o {{lib_dir}}/{{lib_name}} {{src}}
+    {{cc}} -std=c++20 {{flags}} -O3 {{inc}} -o {{lib_dir}}/{{lib_name}} {{src}}
+
 
 clean:
-    rm -rf {{lib_dir}}/{{lib_name}}
+    rm -rf {{lib_dir}}
