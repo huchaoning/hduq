@@ -26,7 +26,7 @@ class CGHEngineCPP:
         else:
             return None
 
-        lib_package = files('hduq.cnhu.cgh.lib')
+        lib_package = files('hduq.cnhu.assets')
         with lib_package.joinpath(lib_name) as lib_path:
             if not lib_path.exists():
                 return None
